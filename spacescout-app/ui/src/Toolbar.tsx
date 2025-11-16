@@ -121,12 +121,17 @@ export function Toolbar() {
       </button>
 
       {isScanning && progress && (
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', color: '#aaa', fontSize: '12px' }}>
-          <span>{progress.files.toLocaleString()} files</span>
-          <span>{progress.dirs.toLocaleString()} dirs</span>
-          {progress.errors > 0 && (
-            <span style={{ color: '#ff6b6b' }}>{progress.errors} errors</span>
-          )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#aaa', fontSize: '12px', flex: 1 }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <span>{progress.files.toLocaleString()} files</span>
+            <span>{progress.dirs.toLocaleString()} dirs</span>
+            {progress.errors > 0 && (
+              <span style={{ color: '#ff6b6b' }}>{progress.errors} errors</span>
+            )}
+          </div>
+          <div style={{ fontSize: '11px', color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '400px' }}>
+            Scanning: {progress.current_path}
+          </div>
         </div>
       )}
     </div>
