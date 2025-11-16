@@ -2,7 +2,7 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct NodeId(pub u32);
 // u32 is fine for personal use; upgrade to u64 if you want "millions of nodes" safety.
 

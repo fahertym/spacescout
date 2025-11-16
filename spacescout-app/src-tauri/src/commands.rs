@@ -1,7 +1,7 @@
 use spacescout_core::{scan_path_with_progress, ScanConfig, layout_treemap, NodeId, Tree};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
-use tauri::State;
+use tauri::{Emitter, State};
 use tokio::sync::Mutex;
 
 /// Application state shared across commands
@@ -44,7 +44,7 @@ pub struct ScanProgress {
 pub async fn start_scan(
     root: String,
     min_size_kb: u64,
-    app_state: State<'_, Mutex<AppState>>,
+    app_state: State<'_, std::sync::Arc<Mutex<AppState>>>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let root_path = PathBuf::from(root);
@@ -53,6 +53,22 @@ pub async fn start_scan(
         ..Default::default()
     };
 
+    // Clone the Arc<Mutex<AppState>> for the spawned task
+    let state_handle = std::sync::Arc::clone(app_state.inner());
+
+    // Start the scan in a spawned task
+    do_scan(root_path, config, state_handle, app_handle);
+
+    Ok(())
+}
+
+/// Helper function to perform the scan in a spawned task
+fn do_scan(
+    root_path: PathBuf,
+    config: ScanConfig,
+    state_handle: std::sync::Arc<tokio::sync::Mutex<AppState>>,
+    app_handle: tauri::AppHandle,
+) {
     // Spawn blocking task for filesystem scan
     tauri::async_runtime::spawn(async move {
         // Create channel for progress updates
@@ -86,7 +102,7 @@ pub async fn start_scan(
         let root_id = tree.root;
 
         // Update application state
-        let mut state = app_state.lock().await;
+        let mut state = state_handle.lock().await;
         state.zoom = root_id;
         state.tree = Some(tree);
 
@@ -102,8 +118,6 @@ pub async fn start_scan(
             let _ = app_handle.emit("breadcrumbs_update", breadcrumb_response);
         }
     });
-
-    Ok(())
 }
 
 /// Helper function to compute breadcrumbs for a given node
@@ -135,32 +149,37 @@ fn compute_breadcrumbs(tree: &Tree, zoom_id: NodeId) -> Vec<BreadcrumbItem> {
 #[tauri::command]
 pub async fn set_zoom(
     node_id: u32,
-    app_state: State<'_, Mutex<AppState>>,
+    app_state: State<'_, std::sync::Arc<Mutex<AppState>>>,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let mut state = app_state.lock().await;
+    let id = NodeId(node_id);
 
+    // Check if tree exists and validate node
     if let Some(tree) = state.tree.as_ref() {
-        let id = NodeId(node_id);
-
-        // Validate node exists
-        if (id.0 as usize) < tree.nodes.len() {
-            state.zoom = id;
-
-            // Recompute layout for zoomed node
-            let rects = layout_treemap(tree, id, 0.0, 0.0, 1.0, 1.0, 0.0001);
-            let update = TreemapUpdate { rects };
-            let _ = app_handle.emit("treemap_update", update);
-
-            // Emit updated breadcrumbs
-            let breadcrumbs = compute_breadcrumbs(tree, id);
-            let breadcrumb_response = BreadcrumbsResponse { items: breadcrumbs };
-            let _ = app_handle.emit("breadcrumbs_update", breadcrumb_response);
-
-            Ok(())
-        } else {
-            Err("Invalid node ID".to_string())
+        if (id.0 as usize) >= tree.nodes.len() {
+            return Err("Invalid node ID".to_string());
         }
+    } else {
+        return Err("No tree loaded".to_string());
+    }
+
+    // Update zoom level (no borrow of tree active here)
+    state.zoom = id;
+
+    // Now get tree reference again for computation
+    if let Some(tree) = state.tree.as_ref() {
+        // Recompute layout for zoomed node
+        let rects = layout_treemap(tree, id, 0.0, 0.0, 1.0, 1.0, 0.0001);
+        let update = TreemapUpdate { rects };
+        let _ = app_handle.emit("treemap_update", update);
+
+        // Emit updated breadcrumbs
+        let breadcrumbs = compute_breadcrumbs(tree, id);
+        let breadcrumb_response = BreadcrumbsResponse { items: breadcrumbs };
+        let _ = app_handle.emit("breadcrumbs_update", breadcrumb_response);
+
+        Ok(())
     } else {
         Err("No tree loaded".to_string())
     }
@@ -177,7 +196,7 @@ pub async fn open_in_file_manager(path: String) -> Result<(), String> {
 /// Get breadcrumb navigation path from root to current zoom level
 #[tauri::command]
 pub async fn get_breadcrumbs(
-    app_state: State<'_, Mutex<AppState>>,
+    app_state: State<'_, std::sync::Arc<Mutex<AppState>>>,
 ) -> Result<BreadcrumbsResponse, String> {
     let state = app_state.lock().await;
 
@@ -199,7 +218,7 @@ pub fn get_home_dir() -> Result<String, String> {
 
 /// Get the parent node ID of the current zoom level (for zoom out)
 #[tauri::command]
-pub async fn get_parent_node(app_state: State<'_, Mutex<AppState>>) -> Result<Option<u32>, String> {
+pub async fn get_parent_node(app_state: State<'_, std::sync::Arc<Mutex<AppState>>>) -> Result<Option<u32>, String> {
     let state = app_state.lock().await;
 
     if let Some(tree) = state.tree.as_ref() {
