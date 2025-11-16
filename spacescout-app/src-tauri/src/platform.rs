@@ -22,29 +22,46 @@ pub fn reveal_in_file_manager(path: &Path) -> std::io::Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        // Try different file managers in order of preference
-        let managers = vec![
-            ("dbus-send", vec![
-                "--session",
-                "--print-reply",
-                "--dest=org.freedesktop.FileManager1",
-                "--type=method_call",
-                "/org/freedesktop/FileManager1",
-                "org.freedesktop.FileManager1.ShowItems",
-                &format!("array:string:file://{}", path.display()),
-                "string:",
-            ]),
-            ("nautilus", vec!["--select", path.to_str().unwrap_or("")]),
-            ("dolphin", vec!["--select", path.to_str().unwrap_or("")]),
-            ("nemo", vec![path.to_str().unwrap_or("")]),
-            ("thunar", vec![path.to_str().unwrap_or("")]),
-        ];
-
         let mut success = false;
-        for (manager, args) in managers {
-            if Command::new(manager).args(&args).spawn().is_ok() {
+
+        // Try dbus-send first (most reliable, works across file managers)
+        // This requires UTF-8 path for the URI format
+        if let Some(path_str) = path.to_str() {
+            let uri = format!("array:string:file://{}", path_str);
+            if Command::new("dbus-send")
+                .args(&[
+                    "--session",
+                    "--print-reply",
+                    "--dest=org.freedesktop.FileManager1",
+                    "--type=method_call",
+                    "/org/freedesktop/FileManager1",
+                    "org.freedesktop.FileManager1.ShowItems",
+                    &uri,
+                    "string:",
+                ])
+                .spawn()
+                .is_ok()
+            {
                 success = true;
-                break;
+            }
+        }
+
+        // Try specific file managers with native OsStr paths (handles non-UTF8)
+        if !success {
+            let managers = [
+                ("nautilus", vec!["--select"]),
+                ("dolphin", vec!["--select"]),
+                ("nemo", vec![]),
+                ("thunar", vec![]),
+            ];
+
+            for (manager, args) in &managers {
+                let mut cmd = Command::new(manager);
+                cmd.args(args.as_slice()).arg(path);
+                if cmd.spawn().is_ok() {
+                    success = true;
+                    break;
+                }
             }
         }
 
