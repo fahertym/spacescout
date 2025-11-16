@@ -1,0 +1,29 @@
+import { useEffect, useState } from 'react';
+import { TreemapCanvas } from './TreemapCanvas';
+import { Toolbar } from './Toolbar';
+
+export function App() {
+  const [dimensions, setDimensions] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight - 60, // Subtract toolbar height
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight - 60,
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#1a1a1a' }}>
+      <Toolbar />
+      <TreemapCanvas width={dimensions.width} height={dimensions.height} />
+    </div>
+  );
+}

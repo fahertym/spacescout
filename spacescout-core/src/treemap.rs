@@ -83,13 +83,8 @@ fn layout_children(
 
     for child in children {
         let frac = (child.size as f32) / parent_size;
-        let area = frac * w * h;
 
-        // Skip rectangles that would be too small to see
-        if area < min_pixel_area {
-            continue;
-        }
-
+        // Calculate dimensions
         let (cx, cy, cw, ch) = if horizontal {
             let cw = w * frac;
             (x + offset, y, cw, h)
@@ -98,7 +93,14 @@ fn layout_children(
             (x, y + offset, w, ch)
         };
 
+        // Always update offset to maintain correct layout proportions
         offset += if horizontal { cw } else { ch };
+
+        // Only render and recurse if the rectangle is large enough to see
+        let area = cw * ch;
+        if area < min_pixel_area {
+            continue;
+        }
 
         let rect = Rect {
             id: child.id,
