@@ -41,11 +41,17 @@ export function TreemapCanvas({ width, height }: TreemapCanvasProps) {
   const [rects, setRects] = useState<Rect[]>([]);
   const [hoveredRect, setHoveredRect] = useState<Rect | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [totalSize, setTotalSize] = useState(0);
 
   // Listen for treemap updates from backend
   useEffect(() => {
     const unlisten = listen<TreemapUpdate>('treemap_update', (event) => {
-      setRects(event.payload.rects);
+      const newRects = event.payload.rects;
+      setRects(newRects);
+
+      // Calculate total size (sum of all top-level items)
+      const total = newRects.reduce((sum, rect) => sum + rect.size, 0);
+      setTotalSize(total);
     });
 
     return () => {
@@ -165,8 +171,7 @@ export function TreemapCanvas({ width, height }: TreemapCanvasProps) {
   const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (hoveredRect) {
-      // Path is not currently sent from backend, would need to add to Rect struct
-      // invoke('open_in_file_manager', { path: hoveredRect.path });
+      invoke('open_in_file_manager', { path: hoveredRect.path });
     }
   };
 
@@ -199,14 +204,21 @@ export function TreemapCanvas({ width, height }: TreemapCanvasProps) {
             fontSize: '12px',
             pointerEvents: 'none',
             zIndex: 1000,
-            maxWidth: '300px',
+            maxWidth: '400px',
             wordWrap: 'break-word',
           }}
         >
           <div><strong>{hoveredRect.name}</strong></div>
-          <div>Size: {formatSize(hoveredRect.size)}</div>
+          <div style={{ color: '#aaa', fontSize: '11px', marginTop: 2 }}>{hoveredRect.path}</div>
+          <div style={{ marginTop: 4 }}>Size: {formatSize(hoveredRect.size)}</div>
+          {totalSize > 0 && (
+            <div>
+              Percentage: {((hoveredRect.size / totalSize) * 100).toFixed(2)}%
+            </div>
+          )}
           <div>Type: {hoveredRect.is_dir ? 'Directory' : 'File'}</div>
-          {hoveredRect.is_dir && <div style={{ marginTop: 4, fontSize: '10px' }}>Click to zoom in</div>}
+          {hoveredRect.is_dir && <div style={{ marginTop: 4, fontSize: '10px', color: '#0099ff' }}>Click to zoom in</div>}
+          {hoveredRect.path && <div style={{ marginTop: 4, fontSize: '10px', color: '#0099ff' }}>Right-click to open in file manager</div>}
         </div>
       )}
     </div>

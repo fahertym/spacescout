@@ -9,6 +9,7 @@ export interface Rect {
   w: number;
   h: number;
   name: string;
+  path: string;
   size: number;
   is_dir: boolean;
 }

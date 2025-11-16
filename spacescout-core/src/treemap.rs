@@ -1,6 +1,7 @@
 // spacescout-core/src/treemap.rs
 use crate::tree::{Tree, NodeId};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rect {
@@ -10,6 +11,7 @@ pub struct Rect {
     pub w: f32,
     pub h: f32,
     pub name: String,
+    pub path: PathBuf,
     pub size: u64,
     pub is_dir: bool,
 }
@@ -109,6 +111,7 @@ fn layout_children(
             w: cw,
             h: ch,
             name: child.name.clone(),
+            path: child.path.clone(),
             size: child.size,
             is_dir: child.is_dir,
         };
