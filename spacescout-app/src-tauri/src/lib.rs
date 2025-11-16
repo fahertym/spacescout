@@ -15,6 +15,7 @@ pub fn run() {
             commands::open_in_file_manager,
             commands::get_breadcrumbs,
             commands::get_home_dir,
+            commands::get_parent_node,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

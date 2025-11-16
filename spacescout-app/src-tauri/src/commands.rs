@@ -196,3 +196,16 @@ pub fn get_home_dir() -> Result<String, String> {
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|_| "Could not determine home directory".to_string())
 }
+
+/// Get the parent node ID of the current zoom level (for zoom out)
+#[tauri::command]
+pub async fn get_parent_node(app_state: State<'_, Mutex<AppState>>) -> Result<Option<u32>, String> {
+    let state = app_state.lock().await;
+
+    if let Some(tree) = state.tree.as_ref() {
+        let current_node = tree.node(state.zoom);
+        Ok(current_node.parent.map(|parent_id| parent_id.0))
+    } else {
+        Err("No tree loaded".to_string())
+    }
+}
