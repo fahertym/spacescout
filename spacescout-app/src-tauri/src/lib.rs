@@ -14,6 +14,7 @@ pub fn run() {
             commands::set_zoom,
             commands::open_in_file_manager,
             commands::get_breadcrumbs,
+            commands::get_home_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

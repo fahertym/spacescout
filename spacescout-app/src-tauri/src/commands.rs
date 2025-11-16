@@ -188,3 +188,11 @@ pub async fn get_breadcrumbs(
         Err("No tree loaded".to_string())
     }
 }
+
+/// Get the user's home directory path
+#[tauri::command]
+pub fn get_home_dir() -> Result<String, String> {
+    std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .map_err(|_| "Could not determine home directory".to_string())
+}

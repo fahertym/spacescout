@@ -9,6 +9,13 @@ export function Toolbar() {
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
 
+  // Load home directory as default path on mount
+  useEffect(() => {
+    invoke<string>('get_home_dir')
+      .then((homeDir) => setScanPath(homeDir))
+      .catch((err) => console.error('Failed to get home directory:', err));
+  }, []);
+
   // Listen for scan progress and completion
   useEffect(() => {
     const unlistenProgress = listen<ScanProgress>('scan_progress', (event) => {
