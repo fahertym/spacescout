@@ -13,6 +13,7 @@ pub fn run() {
             commands::start_scan,
             commands::set_zoom,
             commands::open_in_file_manager,
+            commands::get_breadcrumbs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

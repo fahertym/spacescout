@@ -17,6 +17,19 @@ pub struct TreemapUpdate {
     pub rects: Vec<spacescout_core::Rect>,
 }
 
+/// Breadcrumb item representing a node in the navigation path
+#[derive(Serialize, Clone)]
+pub struct BreadcrumbItem {
+    pub id: u32,
+    pub name: String,
+}
+
+/// Response payload with breadcrumb navigation path
+#[derive(Serialize, Clone)]
+pub struct BreadcrumbsResponse {
+    pub items: Vec<BreadcrumbItem>,
+}
+
 /// Start scanning a directory or drive
 #[tauri::command]
 pub async fn start_scan(
@@ -52,10 +65,40 @@ pub async fn start_scan(
             let rects = layout_treemap(tree_ref, root_id, 0.0, 0.0, 1.0, 1.0, 0.0001);
             let update = TreemapUpdate { rects };
             let _ = app_handle.emit("treemap_update", update);
+
+            // Emit initial breadcrumbs
+            let breadcrumbs = compute_breadcrumbs(tree_ref, root_id);
+            let breadcrumb_response = BreadcrumbsResponse { items: breadcrumbs };
+            let _ = app_handle.emit("breadcrumbs_update", breadcrumb_response);
         }
     });
 
     Ok(())
+}
+
+/// Helper function to compute breadcrumbs for a given node
+fn compute_breadcrumbs(tree: &Tree, zoom_id: NodeId) -> Vec<BreadcrumbItem> {
+    let mut breadcrumbs = Vec::new();
+    let mut current_id = zoom_id;
+
+    // Walk up from current zoom to root
+    loop {
+        let node = tree.node(current_id);
+        breadcrumbs.push(BreadcrumbItem {
+            id: current_id.0,
+            name: node.name.clone(),
+        });
+
+        if let Some(parent_id) = node.parent {
+            current_id = parent_id;
+        } else {
+            break;
+        }
+    }
+
+    // Reverse to get root -> current order
+    breadcrumbs.reverse();
+    breadcrumbs
 }
 
 /// Set the zoom level to a specific node
@@ -79,6 +122,11 @@ pub async fn set_zoom(
             let update = TreemapUpdate { rects };
             let _ = app_handle.emit("treemap_update", update);
 
+            // Emit updated breadcrumbs
+            let breadcrumbs = compute_breadcrumbs(tree, id);
+            let breadcrumb_response = BreadcrumbsResponse { items: breadcrumbs };
+            let _ = app_handle.emit("breadcrumbs_update", breadcrumb_response);
+
             Ok(())
         } else {
             Err("Invalid node ID".to_string())
@@ -94,4 +142,19 @@ pub async fn open_in_file_manager(path: String) -> Result<(), String> {
     let path_buf = PathBuf::from(path);
     crate::platform::reveal_in_file_manager(&path_buf)
         .map_err(|e| format!("Failed to open file manager: {}", e))
+}
+
+/// Get breadcrumb navigation path from root to current zoom level
+#[tauri::command]
+pub async fn get_breadcrumbs(
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<BreadcrumbsResponse, String> {
+    let state = app_state.lock().await;
+
+    if let Some(tree) = state.tree.as_ref() {
+        let breadcrumbs = compute_breadcrumbs(tree, state.zoom);
+        Ok(BreadcrumbsResponse { items: breadcrumbs })
+    } else {
+        Err("No tree loaded".to_string())
+    }
 }

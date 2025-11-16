@@ -16,3 +16,12 @@ export interface Rect {
 export interface TreemapUpdate {
   rects: Rect[];
 }
+
+export interface BreadcrumbItem {
+  id: number;
+  name: string;
+}
+
+export interface BreadcrumbsResponse {
+  items: BreadcrumbItem[];
+}
