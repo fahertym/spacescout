@@ -1,11 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-shell';
+import { listen } from '@tauri-apps/api/event';
+import type { ScanProgress, TreemapUpdate } from './types';
 
 export function Toolbar() {
   const [scanPath, setScanPath] = useState('');
   const [minSizeKB, setMinSizeKB] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
+  const [progress, setProgress] = useState<ScanProgress | null>(null);
+
+  // Listen for scan progress and completion
+  useEffect(() => {
+    const unlistenProgress = listen<ScanProgress>('scan_progress', (event) => {
+      setProgress(event.payload);
+    });
+
+    const unlistenComplete = listen<TreemapUpdate>('treemap_update', () => {
+      setIsScanning(false);
+      setProgress(null);
+    });
+
+    return () => {
+      unlistenProgress.then((fn) => fn());
+      unlistenComplete.then((fn) => fn());
+    };
+  }, []);
 
   const handleStartScan = async () => {
     if (!scanPath) {
@@ -14,6 +33,7 @@ export function Toolbar() {
     }
 
     setIsScanning(true);
+    setProgress(null);
     try {
       await invoke('start_scan', {
         root: scanPath,
@@ -23,6 +43,7 @@ export function Toolbar() {
       console.error('Scan failed:', error);
       alert(`Scan failed: ${error}`);
       setIsScanning(false);
+      setProgress(null);
     }
   };
 
@@ -91,6 +112,16 @@ export function Toolbar() {
       >
         {isScanning ? 'Scanning...' : 'Scan'}
       </button>
+
+      {isScanning && progress && (
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', color: '#aaa', fontSize: '12px' }}>
+          <span>{progress.files.toLocaleString()} files</span>
+          <span>{progress.dirs.toLocaleString()} dirs</span>
+          {progress.errors > 0 && (
+            <span style={{ color: '#ff6b6b' }}>{progress.errors} errors</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

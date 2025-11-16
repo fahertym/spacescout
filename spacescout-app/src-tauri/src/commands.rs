@@ -1,6 +1,6 @@
-use spacescout_core::{scan_path, ScanConfig, layout_treemap, NodeId, Tree};
+use spacescout_core::{scan_path_with_progress, ScanConfig, layout_treemap, NodeId, Tree};
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::State;
 use tokio::sync::Mutex;
 
@@ -30,6 +30,15 @@ pub struct BreadcrumbsResponse {
     pub items: Vec<BreadcrumbItem>,
 }
 
+/// Progress update during scanning
+#[derive(Serialize, Clone)]
+pub struct ScanProgress {
+    pub current_path: String,
+    pub files: u64,
+    pub dirs: u64,
+    pub errors: u64,
+}
+
 /// Start scanning a directory or drive
 #[tauri::command]
 pub async fn start_scan(
@@ -46,9 +55,30 @@ pub async fn start_scan(
 
     // Spawn blocking task for filesystem scan
     tauri::async_runtime::spawn(async move {
-        // Perform scan in blocking context (disk I/O is blocking)
+        // Create channel for progress updates
+        let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<ScanProgress>();
+
+        // Spawn task to emit progress events
+        let app_handle_clone = app_handle.clone();
+        tokio::spawn(async move {
+            while let Some(progress) = progress_rx.recv().await {
+                let _ = app_handle_clone.emit("scan_progress", progress);
+            }
+        });
+
+        // Perform scan in blocking context with progress callback
         let (tree, _stats) = tokio::task::spawn_blocking(move || {
-            scan_path(root_path, &config)
+            scan_path_with_progress(root_path.clone(), &config, Some(|path: &Path, files, dirs, errors| {
+                // Emit progress every 100 directories to avoid flooding
+                if dirs % 100 == 0 || files % 1000 == 0 {
+                    let _ = progress_tx.send(ScanProgress {
+                        current_path: path.display().to_string(),
+                        files,
+                        dirs,
+                        errors,
+                    });
+                }
+            }))
         })
         .await
         .unwrap();

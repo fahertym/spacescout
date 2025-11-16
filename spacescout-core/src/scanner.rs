@@ -30,6 +30,19 @@ pub struct ScanStats {
 /// Scan a directory tree starting at the given path.
 /// Returns the complete tree and statistics about the scan.
 pub fn scan_path(root_path: PathBuf, config: &ScanConfig) -> (Tree, ScanStats) {
+    scan_path_with_progress(root_path, config, None::<fn(&Path, u64, u64, u64)>)
+}
+
+/// Scan a directory tree with optional progress callback.
+/// The callback receives (current_path, files_scanned, dirs_scanned, errors).
+pub fn scan_path_with_progress<F>(
+    root_path: PathBuf,
+    config: &ScanConfig,
+    mut progress_callback: Option<F>,
+) -> (Tree, ScanStats)
+where
+    F: FnMut(&Path, u64, u64, u64),
+{
     let mut tree = Tree::new_root(root_path.clone());
     let mut stats = ScanStats {
         files: 0,
@@ -38,7 +51,14 @@ pub fn scan_path(root_path: PathBuf, config: &ScanConfig) -> (Tree, ScanStats) {
     };
 
     let root_id = tree.root;
-    let total_size = scan_dir_recursive(&root_path, root_id, &mut tree, &mut stats, config);
+    let total_size = scan_dir_recursive(
+        &root_path,
+        root_id,
+        &mut tree,
+        &mut stats,
+        config,
+        &mut progress_callback,
+    );
     tree.node_mut(root_id).size = total_size;
 
     (tree, stats)
@@ -46,13 +66,22 @@ pub fn scan_path(root_path: PathBuf, config: &ScanConfig) -> (Tree, ScanStats) {
 
 /// Recursively scan a directory and build the tree structure.
 /// Returns the total size of all files in this directory and subdirectories.
-fn scan_dir_recursive(
+fn scan_dir_recursive<F>(
     path: &Path,
     parent_id: NodeId,
     tree: &mut Tree,
     stats: &mut ScanStats,
     config: &ScanConfig,
-) -> u64 {
+    progress_callback: &mut Option<F>,
+) -> u64
+where
+    F: FnMut(&Path, u64, u64, u64),
+{
+    // Call progress callback for this directory
+    if let Some(ref mut callback) = progress_callback {
+        callback(path, stats.files, stats.dirs, stats.errors);
+    }
+
     let read_dir = match fs::read_dir(path) {
         Ok(rd) => rd,
         Err(_) => {
@@ -90,7 +119,7 @@ fn scan_dir_recursive(
             // Recursively scan subdirectory
             let child_id = tree.add_child(parent_id, name, entry_path.clone(), true, 0);
             stats.dirs += 1;
-            let dir_size = scan_dir_recursive(&entry_path, child_id, tree, stats, config);
+            let dir_size = scan_dir_recursive(&entry_path, child_id, tree, stats, config, progress_callback);
             tree.node_mut(child_id).size = dir_size;
             total += dir_size;
         } else if file_type.is_file() {

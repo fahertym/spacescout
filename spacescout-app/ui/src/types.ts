@@ -25,3 +25,10 @@ export interface BreadcrumbItem {
 export interface BreadcrumbsResponse {
   items: BreadcrumbItem[];
 }
+
+export interface ScanProgress {
+  current_path: string;
+  files: number;
+  dirs: number;
+  errors: number;
+}
